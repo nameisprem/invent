@@ -1,11 +1,13 @@
 const asyncHandler = require('express-async-handler')
 const User = require("../models/userModel");
 const jwt = require("jsonwebtoken")
+const bcrypt = require("bcryptjs");
 
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "1d" })
 }
 
+//register user
 const registerUser = asyncHandler(async (req, res) => {
     const { name, email, password, phone } = req.body;
 
@@ -65,7 +67,80 @@ const registerUser = asyncHandler(async (req, res) => {
     }
 });
 
+//login user
+
+const loginUser = asyncHandler(async (req, res) => {
+    const { email, password } = req.body;
+
+    //Validation
+    if (!email || !password) {
+        res.status(400);
+        throw new Error("Please enter correct details");
+    }
+
+    //Check if user exists
+    const user = await User.findOne({ email })
+
+    if (!user) {
+        res.status(400);
+        throw new Error("User not found please signup");
+    }
+
+    // user exists, check if password is correct
+    const passwordIsCorrect = await bcrypt.compare(password, user.password)
+
+
+    //Generate Token using jwt
+    const token = generateToken(user._id)
+
+    // Send HTTP-only cookie
+
+    if (passwordIsCorrect) {
+        res.cookie("token", token, {
+            path: "/",
+            httpOnly: true,
+            expires: new Date(Date.now() + 1000 * 86400), // 1 day
+            sameSite: "none",
+            secure: true,
+        });
+    }
+
+
+    if (user && passwordIsCorrect) {
+        const { _id, name, email, photo, phone, bio } = user;
+        res.status(200).json({
+            _id,
+            name,
+            email,
+            photo,
+            phone,
+            bio,
+            token
+        });
+    }
+    else {
+        res.status(400);
+        throw new Error("Email or password invalid data");
+    }
+})
+
+const logoutUser = asyncHandler(async (req, res) => {
+    res.cookie("token", "", {
+        path: "/",
+        httpOnly: true,
+        expires: new Date(0), // instant expire
+        sameSite: "none",
+        secure: true,
+    });
+
+    return res.status(200).json({
+        message: "User successfully logged out"
+    })
+})
+
 
 module.exports = {
     registerUser,
+    loginUser,
+    logoutUser,
 }
