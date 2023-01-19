@@ -138,7 +138,7 @@ const logoutUser = asyncHandler(async (req, res) => {
     })
 })
 
-
+//GET user data
 const getUser = asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id)
 
@@ -159,10 +159,25 @@ const getUser = asyncHandler(async (req, res) => {
     }
 });
 
+//GET login status
+const loginStatus = asyncHandler(async (req, res) => {
+    const token = req.cookies.token;
+    if (!token) {
+        return res.json(false)
+    }
+    //verify token
+    const verifed = jwt.verify(token, process.env.JWT_SECRET)
+    if (verifed) {
+        return res.json(true)
+    }
+    return res.json(false)
+});
+
 
 module.exports = {
     registerUser,
     loginUser,
     logoutUser,
-    getUser
+    getUser,
+    loginStatus
 }
