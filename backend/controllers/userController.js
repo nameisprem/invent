@@ -1,17 +1,18 @@
-const asyncHandler = require('express-async-handler')
+const asyncHandler = require("express-async-handler");
 const User = require("../models/userModel");
-const jwt = require("jsonwebtoken")
+const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
+// Generate Token
 const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "1d" })
-}
+    return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "1d" });
+};
 
-//register user
+// Register User
 const registerUser = asyncHandler(async (req, res) => {
-    const { name, email, password, phone } = req.body;
+    const { name, email, password } = req.body;
 
-    //Validation
+    // Validation
     if (!name || !email || !password) {
         res.status(400);
         throw new Error("Please fill in all required fields");
@@ -29,17 +30,15 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new Error("Email has already been registered");
     }
 
-
     // Create new user
     const user = await User.create({
         name,
         email,
         password,
-        phone
     });
 
-    //Generate Token using jwt
-    const token = generateToken(user._id)
+    //   Generate Token
+    const token = generateToken(user._id);
 
     // Send HTTP-only cookie
     res.cookie("token", token, {
@@ -47,7 +46,7 @@ const registerUser = asyncHandler(async (req, res) => {
         httpOnly: true,
         expires: new Date(Date.now() + 1000 * 86400), // 1 day
         sameSite: "none",
-        secure: true,
+        secure: false,
     });
 
     if (user) {
@@ -59,7 +58,7 @@ const registerUser = asyncHandler(async (req, res) => {
             photo,
             phone,
             bio,
-            token
+            token,
         });
     } else {
         res.status(400);
@@ -67,44 +66,38 @@ const registerUser = asyncHandler(async (req, res) => {
     }
 });
 
-//login user
-
+// Login User
 const loginUser = asyncHandler(async (req, res) => {
     const { email, password } = req.body;
 
-    //Validation
+    // Validate Request
     if (!email || !password) {
         res.status(400);
-        throw new Error("Please enter correct details");
+        throw new Error("Please add email and password");
     }
 
-    //Check if user exists
-    const user = await User.findOne({ email })
+    // Check if user exists
+    const user = await User.findOne({ email });
 
     if (!user) {
         res.status(400);
-        throw new Error("User not found please signup");
+        throw new Error("User not found, please signup");
     }
 
-    // user exists, check if password is correct
-    const passwordIsCorrect = await bcrypt.compare(password, user.password)
+    // User exists, check if password is correct
+    const passwordIsCorrect = await bcrypt.compare(password, user.password);
 
-
-    //Generate Token using jwt
-    const token = generateToken(user._id)
+    //   Generate Token
+    const token = generateToken(user._id);
 
     // Send HTTP-only cookie
-
-    if (passwordIsCorrect) {
-        res.cookie("token", token, {
-            path: "/",
-            httpOnly: true,
-            expires: new Date(Date.now() + 1000 * 86400), // 1 day
-            sameSite: "none",
-            secure: true,
-        });
-    }
-
+    res.cookie("token", token, {
+        path: "/",
+        httpOnly: true,
+        expires: new Date(Date.now() + 1000 * 86400), // 1 day
+        sameSite: "none",
+        secure: false,
+    });
 
     if (user && passwordIsCorrect) {
         const { _id, name, email, photo, phone, bio } = user;
@@ -115,32 +108,29 @@ const loginUser = asyncHandler(async (req, res) => {
             photo,
             phone,
             bio,
-            token
+            token,
         });
-    }
-    else {
+    } else {
         res.status(400);
-        throw new Error("Email or password invalid data");
+        throw new Error("Invalid email or password");
     }
-})
+});
 
+// Logout User
 const logoutUser = asyncHandler(async (req, res) => {
     res.cookie("token", "", {
         path: "/",
         httpOnly: true,
-        expires: new Date(0), // instant expire
+        expires: new Date(0),
         sameSite: "none",
-        secure: true,
+        secure: false,
     });
+    return res.status(200).json({ message: "Successfully Logged Out" });
+});
 
-    return res.status(200).json({
-        message: "User successfully logged out"
-    })
-})
-
-//GET user data
+// Get User Data
 const getUser = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.user._id)
+    const user = await User.findById(req.user._id);
 
     if (user) {
         const { _id, name, email, photo, phone, bio } = user;
@@ -152,26 +142,54 @@ const getUser = asyncHandler(async (req, res) => {
             phone,
             bio,
         });
-    }
-    else {
+    } else {
         res.status(400);
-        throw new Error("user not found");
+        throw new Error("User Not Found");
     }
 });
 
-//GET login status
+// Get Login Status
 const loginStatus = asyncHandler(async (req, res) => {
     const token = req.cookies.token;
     if (!token) {
-        return res.json(false)
+        return res.json(false);
     }
-    //verify token
-    const verifed = jwt.verify(token, process.env.JWT_SECRET)
-    if (verifed) {
-        return res.json(true)
+    // Verify Token
+    const verified = jwt.verify(token, process.env.JWT_SECRET);
+    if (verified) {
+        return res.json(true);
     }
-    return res.json(false)
+    return res.json(false);
 });
+
+// Update User
+const updateUser = asyncHandler(async (req, res) => {
+    const user = await User.findById(req.user._id);
+
+    if (user) {
+        const { name, email, photo, phone, bio } = user;
+        user.email = email;
+        user.name = req.body.name || name;
+        user.phone = req.body.phone || phone;
+        user.bio = req.body.bio || bio;
+        user.photo = req.body.photo || photo;
+
+        const updatedUser = await user.save();
+        res.status(200).json({
+            _id: updatedUser._id,
+            name: updatedUser.name,
+            email: updatedUser.email,
+            photo: updatedUser.photo,
+            phone: updatedUser.phone,
+            bio: updatedUser.bio,
+        });
+    } else {
+        res.status(404);
+        throw new Error("User not found");
+    }
+});
+
+
 
 
 module.exports = {
@@ -179,5 +197,6 @@ module.exports = {
     loginUser,
     logoutUser,
     getUser,
-    loginStatus
+    loginStatus,
+    updateUser
 }
